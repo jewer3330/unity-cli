@@ -74,10 +74,7 @@ mod tests {
             .arg("--target")
             .arg("x86_64-pc-windows-msvc")
             .output();
-        if target_check
-            .as_ref()
-            .map_or(true, |o| !o.status.success())
-        {
+        if target_check.as_ref().map_or(true, |o| !o.status.success()) {
             eprintln!("skipping: x86_64-pc-windows-msvc target not installed");
             return;
         }
