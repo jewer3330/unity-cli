@@ -1982,7 +1982,6 @@ mod tests {
         assert!(format!("{err:#}").contains("Provide --json or --stdin"));
     }
 
-    #[allow(clippy::await_holding_lock)]
     #[test]
     fn build_reference_call_status_includes_explicit_version() {
         let cmd = ReferenceCommand::Status {
@@ -2092,7 +2091,7 @@ mod tests {
             file_glob: None,
             context: 0,
         };
-        let (tool, params) = build_reference_call(&cmd);
+        let (_tool, params) = build_reference_call(&cmd);
         assert_eq!(params["context"], 0);
         assert!(params.get("fileGlob").is_none());
     }
@@ -2123,7 +2122,7 @@ mod tests {
             start_line: None,
             max_lines: None,
         };
-        let (tool, params) = build_reference_call(&cmd);
+        let (_tool, params) = build_reference_call(&cmd);
         assert_eq!(params["path"], "Editor/Foo.cs");
         assert!(params.get("startLine").is_none());
         assert!(params.get("maxLines").is_none());
@@ -2150,12 +2149,13 @@ mod tests {
             version: None,
             dry_run: false,
         };
-        let (tool, params) = build_reference_call(&cmd);
+        let (_tool, params) = build_reference_call(&cmd);
         assert_eq!(params["keep"], 1);
         assert_eq!(params["dryRun"], false);
         assert!(params.get("version").is_none());
     }
 
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test(flavor = "current_thread")]
     async fn run_with_cli_set_active_text_output_when_reachable() {
         let _guard = crate::test_env::env_lock()
