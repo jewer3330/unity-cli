@@ -166,6 +166,14 @@ pub fn tools_root() -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("Unable to resolve tools root"))
 }
 
+pub fn cache_root() -> Result<PathBuf> {
+    env::var("UNITY_CLI_CACHE_ROOT")
+        .ok()
+        .map(|root| PathBuf::from(root.trim()))
+        .or_else(|| dirs::home_dir().map(|home| home.join(".unity/cache")))
+        .ok_or_else(|| anyhow!("Unable to resolve cache root"))
+}
+
 pub fn install_dir() -> Result<PathBuf> {
     install_dir_for(ManagedBinary::CSharpLsp)
 }
@@ -751,6 +759,59 @@ mod tests {
         let _env = EnvVarGuard::set("UNITY_CLI_TOOLS_ROOT", &root_with_spaces);
         let resolved = tools_root().expect("tools root should resolve");
         assert_eq!(resolved, root);
+    }
+
+    #[test]
+    fn cache_root_prefers_unity_cli_cache_root_env() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let root = unique_temp_path("cache-root");
+        let root_with_spaces = format!("  {}  ", root.display());
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", &root_with_spaces);
+        let resolved = cache_root().expect("cache root should resolve");
+        assert_eq!(resolved, root);
+    }
+
+    #[test]
+    fn cache_root_falls_back_to_home_unity_cache() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = env::var("UNITY_CLI_CACHE_ROOT").ok();
+        env::remove_var("UNITY_CLI_CACHE_ROOT");
+        let resolved = cache_root().expect("cache root should resolve");
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(resolved, home.join(".unity/cache"));
+        }
+        if let Some(value) = previous {
+            env::set_var("UNITY_CLI_CACHE_ROOT", value);
+        }
+    }
+
+    #[test]
+    fn tools_root_falls_back_to_home_unity_tools_when_env_unset() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = env::var("UNITY_CLI_TOOLS_ROOT").ok();
+        env::remove_var("UNITY_CLI_TOOLS_ROOT");
+        let resolved = tools_root().expect("tools root should resolve");
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(resolved, home.join(".unity/tools"));
+        }
+        if let Some(value) = previous {
+            env::set_var("UNITY_CLI_TOOLS_ROOT", value);
+        }
+    }
+
+    #[test]
+    fn detect_rid_returns_known_target_triple() {
+        let rid = detect_rid();
+        assert!(matches!(
+            rid,
+            "win-x64" | "win-arm64" | "osx-x64" | "osx-arm64" | "linux-x64" | "linux-arm64"
+        ));
     }
 
     #[test]

@@ -1,0 +1,64 @@
+---
+name: unity-csharp-reference
+description: Browse Unity Technologies' official UnityCsReference C# source as a read-only local cache. Use when the user asks about the exact signature, behavior, or internal implementation of a Unity API, when comparing API differences between Unity versions, or when validating LLM-suggested Unity code against the canonical source. Do not use for editing project code (use `unity-csharp-edit`). Do not use for project-local script reading (use `unity-csharp-navigate`).
+allowed-tools: Bash(unity-cli:*), Read, Grep, Glob
+metadata:
+  author: akiojin
+  version: 0.1.0
+  category: code
+  triggers:
+    - reference
+    - unity-api
+    - signature
+    - unity-source
+    - version-diff
+  siblings:
+    - unity-csharp-navigate
+    - unity-csharp-edit
+    - unity-scene-inspect
+---
+
+# Unity C# Reference
+
+Browse Unity Technologies' official UnityCsReference C# source as a read-only local cache. This skill is the sibling of `unity-csharp-navigate` (project sources) and `unity-csharp-edit` (writes). Hand off as soon as the request implies project-level reading or a write.
+
+## Use When
+
+- The user asks about the exact signature, attributes, or behavior of a Unity API such as `UnityEngine.Animator.Play` or `UnityEditor.AssetDatabase.Refresh`.
+- The user wants to read the internal implementation of a Unity type to predict performance characteristics or side effects.
+- The user compares API differences between Unity versions (LTS vs Tech release branches).
+- The user wants to validate an LLM-suggested Unity script against the canonical Unity source.
+
+## Do Not Use When
+
+- The user wants to read project-local scripts; use `unity-csharp-navigate`.
+- The user wants to write or refactor C# code; use `unity-csharp-edit`.
+- The user wants Unity scene state, packages, or assets; use the matching scene, asset, or editor skill family.
+
+## Preferred Flow
+
+1. Run the runtime checklist in [runtime-checklist.md](references/runtime-checklist.md) before the first fetch in a new environment.
+2. Populate the cache for the project's Unity version with `unity-cli reference fetch --accept-license` (one-time per version).
+3. Use `unity-cli reference grep` for line-level pattern lookups with optional context, or `unity-cli reference search` for filtered file hits.
+4. Open the candidate file with `unity-cli reference view --start-line N --max-lines M` to read the relevant span.
+5. Confirm the signature or behavior, then hand off to `unity-csharp-navigate` for project sources or `unity-csharp-edit` for writes.
+
+```bash
+unity-cli reference fetch --accept-license
+unity-cli reference status --output json
+unity-cli reference grep "class Animator " --context 3
+unity-cli reference view Runtime/Export/Animation/Animator.bindings.cs --start-line 100 --max-lines 60
+unity-cli reference clean --keep 1 --dry-run
+```
+
+## Examples
+
+- "Show me how Unity implements `Animator.Play` so I can predict whether it allocates."
+- "Compare `UnityWebRequest.Get` between Unity 2022.3 and Unity 6 staging."
+- "Confirm the exact signature of `EditorApplication.delayCall` before I wire it into the build pipeline."
+
+## References
+
+- [runtime-checklist.md](references/runtime-checklist.md): runtime prerequisites and license acceptance before the first fetch.
+- [fetch-and-cache.md](references/fetch-and-cache.md): `reference fetch`, `status`, and `clean` command details and branch mapping per Unity version.
+- [symbol-lookup-playbook.md](references/symbol-lookup-playbook.md): the canonical reference → navigate → edit workflow when validating LLM-suggested Unity code.
