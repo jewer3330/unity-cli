@@ -774,6 +774,47 @@ mod tests {
     }
 
     #[test]
+    fn cache_root_falls_back_to_home_unity_cache() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = env::var("UNITY_CLI_CACHE_ROOT").ok();
+        env::remove_var("UNITY_CLI_CACHE_ROOT");
+        let resolved = cache_root().expect("cache root should resolve");
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(resolved, home.join(".unity/cache"));
+        }
+        if let Some(value) = previous {
+            env::set_var("UNITY_CLI_CACHE_ROOT", value);
+        }
+    }
+
+    #[test]
+    fn tools_root_falls_back_to_home_unity_tools_when_env_unset() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = env::var("UNITY_CLI_TOOLS_ROOT").ok();
+        env::remove_var("UNITY_CLI_TOOLS_ROOT");
+        let resolved = tools_root().expect("tools root should resolve");
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(resolved, home.join(".unity/tools"));
+        }
+        if let Some(value) = previous {
+            env::set_var("UNITY_CLI_TOOLS_ROOT", value);
+        }
+    }
+
+    #[test]
+    fn detect_rid_returns_known_target_triple() {
+        let rid = detect_rid();
+        assert!(matches!(
+            rid,
+            "win-x64" | "win-arm64" | "osx-x64" | "osx-arm64" | "linux-x64" | "linux-arm64"
+        ));
+    }
+
+    #[test]
     fn write_and_read_local_version_round_trip() {
         let _guard = env_lock()
             .lock()

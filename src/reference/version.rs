@@ -115,4 +115,64 @@ mod tests {
             "expected --branch hint in error: {message}"
         );
     }
+
+    #[test]
+    fn detect_returns_error_when_project_version_missing() {
+        let tmp = TempDir::new().unwrap();
+        let err = detect_from_project(tmp.path()).unwrap_err();
+        assert!(format!("{err:#}").contains("failed to read"));
+    }
+
+    #[test]
+    fn detect_returns_error_when_editor_version_line_absent() {
+        let tmp = TempDir::new().unwrap();
+        write_project_version(tmp.path(), "m_OtherKey: value\n");
+        let err = detect_from_project(tmp.path()).unwrap_err();
+        let message = format!("{err:#}");
+        assert!(message.contains("m_EditorVersion"));
+    }
+
+    #[test]
+    fn detect_returns_error_when_editor_version_value_empty() {
+        let tmp = TempDir::new().unwrap();
+        write_project_version(tmp.path(), "m_EditorVersion: \n");
+        let err = detect_from_project(tmp.path()).unwrap_err();
+        let message = format!("{err:#}");
+        assert!(message.contains("m_EditorVersion"));
+    }
+
+    #[test]
+    fn parse_editor_version_returns_value_directly() {
+        assert_eq!(
+            parse_editor_version("m_EditorVersion: 2022.3.10f1\n"),
+            Some("2022.3.10f1".to_string())
+        );
+        assert_eq!(
+            parse_editor_version("m_OtherKey: foo\nm_EditorVersion: 2022.3.10f1\n"),
+            Some("2022.3.10f1".to_string())
+        );
+        assert_eq!(parse_editor_version(""), None);
+        assert_eq!(parse_editor_version("m_EditorVersion: "), None);
+    }
+
+    #[test]
+    fn resolve_branch_handles_supported_minors() {
+        for (input, branch) in &[
+            ("2020.3.0f1", "2020.3/staging"),
+            ("2021.3.0f1", "2021.3/staging"),
+            ("2022.3.5f1", "2022.3/staging"),
+            ("2023.1.0f1", "2023.1/staging"),
+            ("6000.0.0f1", "6000.0/staging"),
+        ] {
+            assert_eq!(resolve_branch(input).unwrap(), branch.to_string());
+        }
+    }
+
+    #[test]
+    fn minor_version_key_rejects_invalid_inputs() {
+        assert!(minor_version_key("").is_err());
+        assert!(minor_version_key("2022").is_err());
+        assert!(minor_version_key(".3.0f1").is_err());
+        assert!(minor_version_key("2022.").is_err());
+    }
 }

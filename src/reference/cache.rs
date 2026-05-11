@@ -222,4 +222,99 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         let _ = fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn list_versions_empty_when_root_missing() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("list-missing");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        assert!(list_versions().unwrap().is_empty());
+    }
+
+    #[test]
+    fn gc_keep_zero_removes_all_versions() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("gc-zero");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let base = root.join("UnityCsReference");
+        for v in &["x", "y"] {
+            fs::create_dir_all(base.join(v)).unwrap();
+        }
+        let removed = gc(0, false).unwrap();
+        assert_eq!(removed.len(), 2);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn gc_skips_non_directory_entries() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("gc-mixed");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let base = root.join("UnityCsReference");
+        fs::create_dir_all(&base).unwrap();
+        fs::create_dir_all(base.join("v1")).unwrap();
+        fs::write(base.join("stray.txt"), b"ignore").unwrap();
+        let removed = gc(1, true).unwrap();
+        assert!(removed.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn gc_empty_root_returns_empty() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("gc-empty");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let removed = gc(1, true).unwrap();
+        assert!(removed.is_empty());
+    }
+
+    #[test]
+    fn read_meta_returns_error_when_missing() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("read-meta-miss");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err = read_meta("not-fetched").unwrap_err();
+        assert!(format!("{err:#}").contains("failed to read"));
+    }
+
+    #[test]
+    fn read_meta_returns_error_for_invalid_json() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("read-meta-bad");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let dir = version_dir("bad-version").unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(".unity-cli-meta.json"), "not json {").unwrap();
+        let err = read_meta("bad-version").unwrap_err();
+        assert!(format!("{err:#}").contains("failed to parse"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn list_versions_skips_files_in_root() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("list-files");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let base = root.join("UnityCsReference");
+        fs::create_dir_all(&base).unwrap();
+        fs::create_dir_all(base.join("v1")).unwrap();
+        fs::write(base.join("stray.txt"), b"x").unwrap();
+        let listed = list_versions().unwrap();
+        assert_eq!(listed, vec!["v1".to_string()]);
+        let _ = fs::remove_dir_all(&root);
+    }
 }

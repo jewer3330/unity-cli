@@ -522,4 +522,152 @@ mod tests {
         assert_eq!(value["skipped"], true);
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn execute_view_rejects_parent_traversal_via_dispatcher() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("view-trav");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err = maybe_execute_reference_tool(
+            "reference_view",
+            &json!({"path": "../escape.cs", "version": version}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains(".."));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_view_requires_path_param() {
+        let err = maybe_execute_reference_tool("reference_view", &json!({"version": "any"}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("path"));
+    }
+
+    #[test]
+    fn execute_search_requires_pattern() {
+        let err = maybe_execute_reference_tool("reference_search", &json!({"version": "any"}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("pattern"));
+    }
+
+    #[test]
+    fn execute_grep_requires_pattern() {
+        let err = maybe_execute_reference_tool("reference_grep", &json!({"version": "any"}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("pattern"));
+    }
+
+    #[test]
+    fn execute_grep_invalid_regex_returns_error() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("grep-bad");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err = maybe_execute_reference_tool(
+            "reference_grep",
+            &json!({"pattern": "(unclosed", "version": version}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("regex"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_search_without_max_results_returns_all_hits() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("search-full");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_search",
+            &json!({
+                "pattern": "class",
+                "version": version,
+                "context": 1,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(value["hits"].as_array().unwrap().len() >= 2);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_grep_supports_file_glob_filter() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("grep-glob");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_grep",
+            &json!({
+                "pattern": "class",
+                "version": version,
+                "fileGlob": "*.cs",
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(!value["hits"].as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_clean_dry_run_false_actually_removes() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("clean-actual");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let base = root.join("UnityCsReference");
+        for v in &["v1", "v2"] {
+            std::fs::create_dir_all(base.join(v)).unwrap();
+        }
+        let value =
+            maybe_execute_reference_tool("reference_clean", &json!({"keep": 1, "dryRun": false}))
+                .unwrap()
+                .unwrap();
+        assert_eq!(value["dryRun"], false);
+        assert_eq!(value["removed"].as_array().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_fetch_force_clears_existing_then_fails_clone() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("fetch-force");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let dest = root.join("UnityCsReference").join(version);
+        assert!(dest.exists());
+        // Force should remove dest, then attempt clone with a bogus branch that fails.
+        let result = maybe_execute_reference_tool(
+            "reference_fetch",
+            &json!({
+                "version": version,
+                "branch": "definitely-not-a-real-branch-xyz",
+                "force": true,
+                "acceptLicense": true,
+            }),
+        )
+        .unwrap();
+        assert!(result.is_err(), "clone should fail for bogus branch");
+        assert!(
+            !dest.exists(),
+            "force should have removed dest before clone"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
