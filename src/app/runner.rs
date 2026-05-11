@@ -7,8 +7,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
     Cli, CliCommand, Command, InstancesCommand, LspCommand, LspdCommand, OutputFormat, RawArgs,
-    SceneCommand, SkillFormat, SkillSeverity, SkillsCommand, SystemCommand, ToolCommand,
-    UnitydCommand,
+    ReferenceCommand, SceneCommand, SkillFormat, SkillSeverity, SkillsCommand, SystemCommand,
+    ToolCommand, UnitydCommand,
 };
 use crate::config::RuntimeConfig;
 use crate::core::command_stats::{self, CliCommandTiming};
@@ -218,6 +218,11 @@ pub async fn run_with_cli(cli: Cli) -> Result<()> {
                 run_skills_lint(root.as_deref(), *format, *severity)?;
             }
         },
+        Command::Reference { command } => {
+            let (tool, params) = build_reference_call(command);
+            let value = execute_tool(&cli, tool, params).await?;
+            print_value(&value, cli.output)?;
+        }
         Command::Batch { json, stdin } => {
             let value = execute_batch(&cli, json.as_deref(), *stdin).await?;
             print_value(&value, cli.output)?;
@@ -232,6 +237,110 @@ pub async fn run_with_cli(cli: Cli) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn build_reference_call(command: &ReferenceCommand) -> (&'static str, Value) {
+    let mut params = serde_json::Map::new();
+    let tool: &'static str = match command {
+        ReferenceCommand::Fetch {
+            version,
+            branch,
+            force,
+            accept_license,
+        } => {
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(b) = branch {
+                params.insert("branch".to_string(), Value::String(b.clone()));
+            }
+            params.insert("force".to_string(), Value::Bool(*force));
+            params.insert("acceptLicense".to_string(), Value::Bool(*accept_license));
+            "reference_fetch"
+        }
+        ReferenceCommand::Status { version } => {
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            "reference_status"
+        }
+        ReferenceCommand::Search {
+            pattern,
+            version,
+            path,
+            max_results,
+            regex,
+        } => {
+            params.insert("pattern".to_string(), Value::String(pattern.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(p) = path {
+                params.insert("path".to_string(), Value::String(p.clone()));
+            }
+            if let Some(n) = max_results {
+                params.insert("maxResults".to_string(), Value::Number((*n).into()));
+            }
+            params.insert("regex".to_string(), Value::Bool(*regex));
+            "reference_search"
+        }
+        ReferenceCommand::Grep {
+            pattern,
+            version,
+            file_glob,
+            context,
+        } => {
+            params.insert("pattern".to_string(), Value::String(pattern.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(g) = file_glob {
+                params.insert("fileGlob".to_string(), Value::String(g.clone()));
+            }
+            params.insert(
+                "context".to_string(),
+                Value::Number((u64::from(*context)).into()),
+            );
+            "reference_grep"
+        }
+        ReferenceCommand::View {
+            path,
+            version,
+            start_line,
+            max_lines,
+        } => {
+            params.insert("path".to_string(), Value::String(path.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(n) = start_line {
+                params.insert(
+                    "startLine".to_string(),
+                    Value::Number((u64::from(*n)).into()),
+                );
+            }
+            if let Some(n) = max_lines {
+                params.insert(
+                    "maxLines".to_string(),
+                    Value::Number((u64::from(*n)).into()),
+                );
+            }
+            "reference_view"
+        }
+        ReferenceCommand::Clean {
+            keep,
+            version,
+            dry_run,
+        } => {
+            params.insert("keep".to_string(), Value::Number((*keep).into()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            params.insert("dryRun".to_string(), Value::Bool(*dry_run));
+            "reference_clean"
+        }
+    };
+    (tool, Value::Object(params))
 }
 
 async fn execute_raw(cli: &Cli, args: &RawArgs) -> Result<Value> {

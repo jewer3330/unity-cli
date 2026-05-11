@@ -166,6 +166,14 @@ pub fn tools_root() -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("Unable to resolve tools root"))
 }
 
+pub fn cache_root() -> Result<PathBuf> {
+    env::var("UNITY_CLI_CACHE_ROOT")
+        .ok()
+        .map(|root| PathBuf::from(root.trim()))
+        .or_else(|| dirs::home_dir().map(|home| home.join(".unity/cache")))
+        .ok_or_else(|| anyhow!("Unable to resolve cache root"))
+}
+
 pub fn install_dir() -> Result<PathBuf> {
     install_dir_for(ManagedBinary::CSharpLsp)
 }
@@ -750,6 +758,18 @@ mod tests {
         let root_with_spaces = format!("  {}  ", root.display());
         let _env = EnvVarGuard::set("UNITY_CLI_TOOLS_ROOT", &root_with_spaces);
         let resolved = tools_root().expect("tools root should resolve");
+        assert_eq!(resolved, root);
+    }
+
+    #[test]
+    fn cache_root_prefers_unity_cli_cache_root_env() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let root = unique_temp_path("cache-root");
+        let root_with_spaces = format!("  {}  ", root.display());
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", &root_with_spaces);
+        let resolved = cache_root().expect("cache root should resolve");
         assert_eq!(resolved, root);
     }
 

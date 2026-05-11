@@ -78,6 +78,10 @@ pub enum Command {
         #[command(subcommand)]
         command: SkillsCommand,
     },
+    Reference {
+        #[command(subcommand)]
+        command: ReferenceCommand,
+    },
     Batch {
         #[arg(long, value_name = "JSON")]
         json: Option<String>,
@@ -214,5 +218,66 @@ pub enum SkillsCommand {
         /// Severity gate; `error` exits non-zero on any violation.
         #[arg(long, value_enum, default_value_t = SkillSeverity::Warning)]
         severity: SkillSeverity,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReferenceCommand {
+    /// Fetch UnityCsReference for the active Unity version into the local cache.
+    Fetch {
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        branch: Option<String>,
+        #[arg(long, default_value_t = false)]
+        force: bool,
+        #[arg(long, default_value_t = false)]
+        accept_license: bool,
+    },
+    /// Show cached UnityCsReference versions and disk usage.
+    Status {
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Search the cached reference source for a pattern (file-level hits).
+    Search {
+        pattern: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        max_results: Option<u64>,
+        #[arg(long, default_value_t = false)]
+        regex: bool,
+    },
+    /// Grep the cached reference source line-by-line with optional context.
+    Grep {
+        pattern: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        file_glob: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        context: u32,
+    },
+    /// View a file from the cached reference source with an optional line range.
+    View {
+        path: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        start_line: Option<u32>,
+        #[arg(long)]
+        max_lines: Option<u32>,
+    },
+    /// Remove old UnityCsReference snapshots, keeping the newest entries.
+    Clean {
+        #[arg(long, default_value_t = 1)]
+        keep: u64,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
     },
 }
