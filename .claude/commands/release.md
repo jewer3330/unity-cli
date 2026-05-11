@@ -1,11 +1,11 @@
 ---
-description: developブランチでバージョン更新を行い、mainへのRelease PRを作成します（LLMベース）。
+description: develop または develop に fast-forward 可能な worktree からバージョン更新を行い、mainへのRelease PRを作成します（LLMベース）。
 tags: [project]
 ---
 
 # リリースコマンド（LLMベース）
 
-develop ブランチでバージョン更新・CHANGELOG更新を行い、main への Release PR を作成します。
+`origin/develop` に対してバージョン更新・CHANGELOG 更新の commit を land させ、main への Release PR を作成します。develop ブランチからも、develop に fast-forward 可能な gwt feature worktree からも実行可能です。
 
 ## フロー概要
 
@@ -17,7 +17,8 @@ develop (バージョン更新・CHANGELOG更新) → main (PR)
 
 ## 前提条件
 
-- `develop` ブランチにチェックアウトしていること
+- 現在の HEAD が `origin/develop` の ancestor であること (= fast-forward 可能、または既に origin/develop と一致)。gwt の feature worktree からでも実行可能
+- working tree が clean、または release に関係しないファイル編集を stash / commit / discard で除去済みであること
 - `git-cliff` がインストールされていること（`cargo install git-cliff`）
 - `gh` CLI が認証済み（`gh auth login`）
 - 前回リリースタグ以降にコミットがあること
@@ -26,21 +27,39 @@ develop (バージョン更新・CHANGELOG更新) → main (PR)
 
 以下の手順を **順番に** 実行してください。エラーが発生した場合は即座に中断し、エラーメッセージを日本語で表示してください。
 
-### 1. ブランチ確認
+### 1. fast-forward 可能性確認
+
+まず origin/develop を fetch し、現在の HEAD が ancestor かどうか確認：
 
 ```bash
-git rev-parse --abbrev-ref HEAD
+git fetch origin develop
+git merge-base --is-ancestor HEAD origin/develop
 ```
 
-**判定**: 結果が `develop` でなければ、以下のメッセージを表示して中断：
-> 「エラー: developブランチでのみ実行可能です。現在のブランチ: {ブランチ名}」
+**判定**:
+- ancestor check 成功 (exit 0): 続行（HEAD は origin/develop の祖先または同一）
+- 失敗 (exit 1): 以下のメッセージを表示して中断
+  > 「エラー: 現在の HEAD は origin/develop の ancestor ではありません。release は origin/develop に新 commit を land させる必要があるため、まず現 worktree の作業を develop に merge してから再実行してください。現在のブランチ: {ブランチ名}」
 
-### 2. リモート同期
+加えて、working tree の dirty 検知：
+
+```bash
+git status --porcelain
+```
+
+release に無関係な変更（`Cargo.toml` / `Cargo.lock` / `package.json` / `UnityCliBridge/Packages/unity-cli-bridge/package.json` / `CHANGELOG.md` 以外）が含まれていれば中断：
+> 「エラー: working tree に release と無関係な未 commit の変更があります。stash / commit / discard で除去してから再実行してください。」
+
+### 2. リモート同期と HEAD 前進
 
 ```bash
 git fetch origin main develop
-git pull origin develop
+git pull --ff-only origin develop
 ```
+
+`--ff-only` により、fast-forward できない場合は失敗して止まる（Step 1 の ancestor check で事前に確認済みのため通常は成功）。
+
+これは **branch 切替ではなく、現在の branch の HEAD を origin/develop tip まで前進させる操作** であり、AGENTS.md「branch / worktree を手動で作成・切替・削除しない」に抵触しない。HEAD が既に origin/develop と一致している場合は no-op で成功する。
 
 ### 3. リリース対象コミット確認
 
@@ -130,11 +149,13 @@ git commit -m "chore(release): v{NEW_VERSION}"
 ### 7. push
 
 ```bash
-git push origin develop
+git push origin HEAD:develop
 ```
 
+`HEAD:develop` の refspec push により、現 branch の名前に依存せず remote develop に release commit を land させる。develop ブランチ上で実行した場合も従来通り動作する（HEAD == develop の場合 `git push origin develop` と同義）。
+
 **失敗時**: 最大3回リトライ。それでも失敗した場合：
-> 「エラー: pushに失敗しました。ネットワーク接続を確認してください。」
+> 「エラー: push に失敗しました。他 agent / human が同時に develop を更新していないか、ネットワーク接続を確認してください。」
 
 ### 8. Closing Issue の収集
 
@@ -239,6 +260,17 @@ PR が main にマージされると、`.github/workflows/release.yml`（main pu
 4. GitHub Release を作成し、ビルド済みバイナリをアップロード
 
 **手動後処理**: 必要に応じて `cargo publish` を実行して crates.io に公開してください。
+
+## worktree からの実行について
+
+gwt で feature worktree（例: `work/YYYYMMDD-HHMM`）上にあるときも本コマンドは実行可能。具体的には:
+
+- Step 1 の `git merge-base --is-ancestor HEAD origin/develop` で、現 HEAD が origin/develop の ancestor であることを確認
+- Step 2 の `git pull --ff-only origin develop` で現 branch の HEAD を origin/develop tip まで前進させる
+- Step 7 の `git push origin HEAD:develop` の refspec push で remote develop に release commit を land させる
+- 結果、現 branch の名前は何であっても、操作は常に origin/develop を対象にする
+
+注意: 現 HEAD が origin/develop の ancestor でない場合（例: feature worktree が develop と独立した編集を持っている場合）は Step 1 で中断する。release 前に該当作業を develop に merge し終える必要がある。
 
 ## トラブルシューティング
 
