@@ -1,3 +1,9 @@
+## [0.11.1] - 2026-05-12
+
+### 🐛 Bug Fixes
+
+- *(release)* aarch64-unknown-linux-gnu cross-build で OpenSSL ARM64 ライブラリと pkg-config 環境変数を設定し、v0.11.0 で skip された GitHub Release バイナリ upload を復旧
+
 ## [0.11.0] - 2026-05-12
 
 ### 🚀 Features
