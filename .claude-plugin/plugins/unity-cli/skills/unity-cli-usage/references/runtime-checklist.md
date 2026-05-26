@@ -14,8 +14,9 @@
 
 ## Command Routing
 
-- Prefer typed subcommands for stable workflows such as `system`, `scene`, and `instances`.
-- Use `raw` when only the low-level tool exists or you need an exact tool payload.
+- Typed subcommands exist for a small set of operations: `system ping`, `scene create`, `instances list`, `instances set-active`. Use them when available.
+- For every other tool, use `unity-cli raw <tool_name> --json '{...}'` (or its alias `unity-cli tool call <tool_name> --json '{...}'`). This is the primary invocation pattern, not a fallback — most bridge tools (e.g. `analyze_scene_contents`, `find_by_component`, `modify_component`, `get_compilation_state`) have no typed wrapper.
+- Discover tools with `unity-cli tool list`. Inspect a tool's expected JSON payload with `unity-cli tool schema <tool_name> --output json`.
 - Use `--output json` when another tool or script will consume the result.
 
 ## CI Notes
