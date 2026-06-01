@@ -9,6 +9,7 @@ using System.Diagnostics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityCliBridge;
 using UnityCliBridge.Models;
 using UnityCliBridge.Helpers;
 using UnityCliBridge.Logging;
@@ -976,6 +977,15 @@ namespace UnityCliBridge.Core
                         var assetDatabaseResult = AssetDatabaseHandler.HandleCommand(command.Parameters["action"]?.ToString(), command.Parameters);
                         response = Response.SuccessResult(command.Id, assetDatabaseResult);
                         break;
+                    case "list_custom_tools":
+                        response = Response.SuccessResult(command.Id, CustomToolRegistry.ListTools());
+                        break;
+                    case "get_custom_tool_schema":
+                        response = Response.SuccessResult(command.Id, CustomToolRegistry.GetToolSchema(command.Parameters));
+                        break;
+                    case "refresh_custom_tools":
+                        response = Response.SuccessResult(command.Id, CustomToolRegistry.Refresh());
+                        break;
                     // Asset dependency analysis commands
                     case "analyze_asset_dependencies":
                         var assetDependencyResult = AssetDependencyHandler.HandleCommand(command.Parameters["action"]?.ToString(), command.Parameters);
@@ -1054,6 +1064,13 @@ namespace UnityCliBridge.Core
                             break;
                         }
                     default:
+                        if (CustomToolRegistry.TryExecute(command.Type, command.Parameters, out var customToolResult, out var customToolError))
+                        {
+                            response = customToolError == null
+                                ? Response.SuccessResult(command.Id, customToolResult)
+                                : Response.ErrorResult(command.Id, customToolError, "CUSTOM_TOOL_ERROR", new { commandType = command.Type });
+                            break;
+                        }
                         // Use new format with error details
                         response = Response.ErrorResult(
                             command.Id,
