@@ -41,8 +41,8 @@ Bootstrap the unity-cli toolchain so other Unity skills can run reliably. This i
 2. Verify reachability with `unity-cli system ping`.
 3. When multiple editors may run, call `unity-cli instances list` and pick the target with `unity-cli instances set-active <host:port>`.
 4. Pick the right entry point for the operation:
-   - **Typed subcommand** when one exists. Only a small set of operations have typed wrappers: `system ping`, `scene create`, `instances list`, `instances set-active`. Use them when they apply.
-   - **`raw <tool_name> --json '{...}'`** (equivalent alias: `tool call <tool_name> --json '{...}'`) for every other tool. This is the primary way to invoke the bridge, not a fallback. Discover tools with `unity-cli tool list`; inspect a tool's expected payload with `unity-cli tool schema <tool_name> --output json`.
+   - **Typed subcommand** when one exists. The bootstrap-relevant typed subcommands are `system ping`, `scene create`, `instances list`, and `instances set-active`. Other typed subcommands exist too — notably the `reference *` family (`fetch`, `status`, `search`, `grep`, `view`, `find-symbol`, `diff`, `resolve-symbol-at`, `embed-build`, `embed-search`, `clean`), which wrap the `reference_*` bridge tools; see the `unity-csharp-reference` skill. But most bridge tools have no typed wrapper. (Note: `instances list` / `instances set-active` are local registry operations, not bridge-tool wrappers.)
+   - **`raw <tool_name> --json '{...}'`** (equivalent alias: `tool call <tool_name> --json '{...}'`) for every tool without a typed wrapper. This is the primary way to invoke the bridge, not a fallback. Discover tools with `unity-cli tool list`; inspect a tool's expected payload with `unity-cli tool schema <tool_name> --output json`.
 5. Use `--output json` for chained automation.
 
 ```bash
