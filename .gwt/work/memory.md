@@ -65,3 +65,10 @@
 - Mistake: 過去 PR で `cargo llvm-cov ... -- --test-threads=1` を採用していたのに、`cargo test` 側 (CI workflow / pre-push hook) を並列のまま残し、env race を本質的に解消する手当てをしていなかった。`crate::test_env::env_lock()` で test code 内の env 操作は serialize できているが、Rust の `std::env::set_var` は process-global で thread-unsafe、library 内部の getenv 読み出しと衝突するため並列実行は本質的に安全でない。
 - Rule: `cargo test` / `cargo llvm-cov` の呼び出しは CI / hook / ローカル品質ゲート全てで `-- --test-threads=1` を必須にする。新規 test を追加する際も、env を mutate する場合は `crate::test_env::env_lock()` を取得した上で、それでも並列実行に頼らない前提を守る。env を触る test を追加する際は「並列でも壊れない設計か」を考慮し、可能なら env 依存自体を public API への引数注入で除去する方向を優先する。
 - Checkpoint: 1. CI workflow (`.github/workflows/test.yml`) の `cargo test` / `cargo llvm-cov` 行に `-- --test-threads=1` があるか確認 2. CLAUDE.md の品質ゲートも `-- --test-threads=1` 表記で揃っているか確認 3. 新規 test で `std::env::set_var` を使う場合は `env_lock` を取得し、PR description に「env を mutate するため並列実行禁止」と明記する
+
+## 2026-06-16 — 外部PRのbase branch案内
+
+Type: lesson
+Context: PR #211 が外部forkから main 宛てに作成され、required CI が走らない状態だった。
+Learning: unity-cli では外部 contributor の通常PRは develop 宛てに案内する。main は base repository からの release/sync PR 用で、main-pr-policy.yml が fork からの main PR を拒否する。
+Future Action: 外部PRレビュー時は最初に base branch と required CI 実行状況を確認し、main 宛てなら develop への retarget を依頼する。CONTRIBUTING.md の Branch Policy を参照する。

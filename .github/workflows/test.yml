@@ -31,7 +31,10 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Run cargo test
-        run: cargo test
+        # env-mutating tests share process-global state (std::env::set_var
+        # is not thread-safe relative to library getenv reads), so serialize
+        # to avoid flakiness. The coverage job already uses --test-threads=1.
+        run: cargo test -- --test-threads=1
 
   lsp-test:
     name: LSP Tests (required)
@@ -76,10 +79,11 @@ jobs:
             --all-targets \
             --cobertura \
             --output-path coverage/rust/cobertura.xml \
-            --fail-under-lines 90
+            --fail-under-lines 90 \
+            -- --test-threads=1
 
       - name: Upload Rust coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/rust/cobertura.xml
@@ -109,7 +113,7 @@ jobs:
             /p:ThresholdStat=total
 
       - name: Upload LSP coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lsp/coverage.cobertura.xml
