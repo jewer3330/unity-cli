@@ -121,7 +121,19 @@ pub async fn run_with_cli(cli: Cli) -> Result<()> {
                 host,
                 timeout_ms,
             } => {
-                let parsed_ports = parse_ports(ports)?;
+                let parsed = parse_ports_with_diagnostics(ports)?;
+                if !parsed.duplicate_ports.is_empty() {
+                    eprintln!(
+                        "Warning: duplicate --ports values ignored: {}",
+                        parsed
+                            .duplicate_ports
+                            .iter()
+                            .map(u16::to_string)
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    );
+                }
+                let parsed_ports = parsed.ports;
                 let statuses = list_instances(host, &parsed_ports, *timeout_ms).await?;
 
                 if matches!(cli.output, OutputFormat::Json) {
@@ -876,12 +888,27 @@ fn parse_json_object(raw: &str) -> Result<Value> {
     Ok(value)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ParsedPorts {
+    ports: Vec<u16>,
+    duplicate_ports: Vec<u16>,
+}
+
+#[cfg(test)]
 fn parse_ports(raw: &Option<String>) -> Result<Vec<u16>> {
+    Ok(parse_ports_with_diagnostics(raw)?.ports)
+}
+
+fn parse_ports_with_diagnostics(raw: &Option<String>) -> Result<ParsedPorts> {
     let Some(csv) = raw else {
-        return Ok(Vec::new());
+        return Ok(ParsedPorts {
+            ports: Vec::new(),
+            duplicate_ports: Vec::new(),
+        });
     };
 
     let mut ports = Vec::new();
+    let mut duplicate_ports = Vec::new();
     for token in csv
         .split(',')
         .map(str::trim)
@@ -892,10 +919,15 @@ fn parse_ports(raw: &Option<String>) -> Result<Vec<u16>> {
             .with_context(|| format!("Invalid port in --ports: {token}"))?;
         if !ports.contains(&port) {
             ports.push(port);
+        } else if !duplicate_ports.contains(&port) {
+            duplicate_ports.push(port);
         }
     }
 
-    Ok(ports)
+    Ok(ParsedPorts {
+        ports,
+        duplicate_ports,
+    })
 }
 
 fn print_value(value: &Value, format: OutputFormat) -> Result<()> {
@@ -998,8 +1030,8 @@ fn init_tracing(verbose: u8) -> Result<()> {
 mod tests {
     use super::{
         build_reference_call, execute_tool, init_tracing, load_params, parse_external_tool_command,
-        parse_json_object, parse_ports, print_value, run_with_cli, runtime_overrides_from_cli,
-        validate_tool_params,
+        parse_json_object, parse_ports, parse_ports_with_diagnostics, print_value, run_with_cli,
+        runtime_overrides_from_cli, validate_tool_params,
     };
     use crate::cli::{
         Cli, Command, InstancesCommand, LspdCommand, OutputFormat, RawArgs, ReferenceCommand,
@@ -1007,6 +1039,7 @@ mod tests {
     };
     use serde_json::json;
     use tempfile::tempdir;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn cli_for(command: Command) -> Cli {
         cli_for_with_output(command, OutputFormat::Json)
@@ -1028,6 +1061,50 @@ mod tests {
         let mut cli = cli_for(command);
         cli.dry_run = true;
         cli
+    }
+
+    async fn spawn_mock_bridge(accept_count: usize) -> (u16, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("listener should bind");
+        let port = listener
+            .local_addr()
+            .expect("listener should expose local addr")
+            .port();
+
+        let task = tokio::spawn(async move {
+            for _ in 0..accept_count {
+                let (mut socket, _) = listener.accept().await.expect("accept should succeed");
+                let mut len_buf = [0_u8; 4];
+                socket
+                    .read_exact(&mut len_buf)
+                    .await
+                    .expect("request header should be readable");
+                let payload_len = i32::from_be_bytes(len_buf);
+                let mut payload = vec![0_u8; payload_len as usize];
+                socket
+                    .read_exact(&mut payload)
+                    .await
+                    .expect("request payload should be readable");
+
+                let response = json!({
+                    "status": "success",
+                    "result": {"pong": true}
+                });
+                let response_bytes =
+                    serde_json::to_vec(&response).expect("response should serialize");
+                socket
+                    .write_all(&(response_bytes.len() as i32).to_be_bytes())
+                    .await
+                    .expect("response header should write");
+                socket
+                    .write_all(&response_bytes)
+                    .await
+                    .expect("response payload should write");
+            }
+        });
+
+        (port, task)
     }
 
     struct EnvVarGuard {
@@ -1089,6 +1166,14 @@ mod tests {
     fn parse_ports_deduplicates_values() {
         let parsed = parse_ports(&Some("6400, 6401,6400".to_string())).expect("ports should parse");
         assert_eq!(parsed, vec![6400, 6401]);
+    }
+
+    #[test]
+    fn parse_ports_with_diagnostics_reports_duplicate_values() {
+        let parsed = parse_ports_with_diagnostics(&Some("6400, 6401,6400, 6401".to_string()))
+            .expect("ports should parse");
+        assert_eq!(parsed.ports, vec![6400, 6401]);
+        assert_eq!(parsed.duplicate_ports, vec![6400, 6401]);
     }
 
     #[test]
@@ -2412,16 +2497,7 @@ mod tests {
                 .expect("registry path should be valid UTF-8"),
         );
 
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .expect("listener should bind");
-        let port = listener
-            .local_addr()
-            .expect("listener should expose local addr")
-            .port();
-        let accept_task = tokio::spawn(async move {
-            let _ = listener.accept().await;
-        });
+        let (port, accept_task) = spawn_mock_bridge(1).await;
 
         run_with_cli(cli_for_with_output(
             Command::Instances {
