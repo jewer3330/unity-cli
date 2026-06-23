@@ -854,6 +854,26 @@ namespace UnityCliBridge.Core
         }
 
         /// <summary>
+        /// Starts the TCP listener.
+        /// </summary>
+        public static void Start()
+        {
+            BridgeLogger.Log("Starting...");
+            TryLoadProjectSettingsAndApply();
+            StartTcpListener();
+        }
+
+        /// <summary>
+        /// Stops the TCP listener without unregistering editor callbacks.
+        /// </summary>
+        public static void Stop()
+        {
+            BridgeLogger.Log("Stopping...");
+            StopTcpListener();
+            Status = BridgeStatus.NotConfigured;
+        }
+
+        /// <summary>
         /// Restarts the TCP listener
         /// </summary>
         public static void Restart()

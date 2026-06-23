@@ -28,6 +28,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "save_prefab",
     "build_index",
     "update_index",
+    "get_index_status",
     "get_compilation_state",
     "add_component",
     "set_component_field",
@@ -201,6 +202,7 @@ fn tool_description(name: &str) -> &'static str {
         "get_symbols" => "Get symbols in a C# source file",
         "build_index" => "Build the local code search index",
         "update_index" => "Update the local code search index",
+        "get_index_status" => "Get local code search index status",
         "find_symbol" => "Find symbol definitions",
         "find_refs" => "Find symbol references",
         "run_tests" => "Run EditMode/PlayMode tests",
@@ -216,6 +218,7 @@ fn tool_executor(name: &str) -> ToolExecutor {
         | "get_symbols"
         | "build_index"
         | "update_index"
+        | "get_index_status"
         | "find_symbol"
         | "find_refs"
         | "rename_symbol"
@@ -277,6 +280,7 @@ fn is_read_only_tool(name: &str) -> bool {
             | "search"
             | "find_symbol"
             | "get_symbols"
+            | "get_index_status"
             | "get_project_setting"
             | "get_package_setting"
             | "get_project_settings"
@@ -454,6 +458,7 @@ fn tool_params_schema(name: &str) -> Value {
             false,
         ),
         "update_index" => object_schema(&[("paths", array_of(string_schema()))], &["paths"], false),
+        "get_index_status" => object_schema(&[], &[], false),
         "find_symbol" => object_schema(
             &[
                 ("name", string_schema()),
@@ -2471,7 +2476,7 @@ mod tests {
 
     #[test]
     fn tool_catalog_keeps_manifest_parity_count() {
-        assert_eq!(TOOL_NAMES.len(), 129);
+        assert_eq!(TOOL_NAMES.len(), 130);
     }
 
     #[test]
@@ -2585,6 +2590,14 @@ mod tests {
     fn build_index_schema_allows_output_path() {
         let spec = get_tool_spec("build_index").expect("build_index must exist");
         assert!(spec.params_schema["properties"]["outputPath"].is_object());
+    }
+
+    #[test]
+    fn get_index_status_schema_is_strict_empty_object() {
+        let spec = get_tool_spec("get_index_status").expect("get_index_status must exist");
+        assert_eq!(spec.executor, ToolExecutor::Local);
+        assert_eq!(spec.params_schema["additionalProperties"], false);
+        assert!(spec.params_schema["required"].is_null());
     }
 
     #[test]
