@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "husky",
     "release": "echo \"Use scripts/publish.sh for manual release orchestration.\" && exit 1",
-    "lint:md": "markdownlint README.md CONTRIBUTING.md CLAUDE.md RELEASE.md docs/development.md docs/constitution.md UnityCliBridge/Packages/unity-cli-bridge/**/*.md .github/workflows/README.md --config .markdownlint.json --ignore-path .markdownlintignore",
+    "lint:md": "markdownlint README.md CONTRIBUTING.md CLAUDE.md RELEASE.md docs/configuration.md docs/development.md docs/constitution.md UnityCliBridge/Packages/unity-cli-bridge/**/*.md .github/workflows/README.md --config .markdownlint.json --ignore-path .markdownlintignore",
     "lint:format": "prettier --check .",
     "lint:format:write": "prettier --write .",
     "test:rust": "cargo test",

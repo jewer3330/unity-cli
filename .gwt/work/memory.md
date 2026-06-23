@@ -72,3 +72,24 @@ Type: lesson
 Context: PR #211 が外部forkから main 宛てに作成され、required CI が走らない状態だった。
 Learning: unity-cli では外部 contributor の通常PRは develop 宛てに案内する。main は base repository からの release/sync PR 用で、main-pr-policy.yml が fork からの main PR を拒否する。
 Future Action: 外部PRレビュー時は最初に base branch と required CI 実行状況を確認し、main 宛てなら develop への retarget を依頼する。CONTRIBUTING.md の Branch Policy を参照する。
+
+## 2026-06-23 — SPEC完了判定はGitHub live Issue本文で確認する
+
+Type: lesson
+Context: 全SPEC実装状況検証で issue.spec.list / issue.spec.section と GitHub live Issue 本文を照合した。
+Learning: OPEN gwt-spec の件数やTasks状態は GitHub live Issue (`gh issue list/view`) で再確認する。legacy形式のgwt-spec本文では `issue.spec.section` が `## Tasks` を拾えない場合があり、section未検出だけで本文欠落や完了とは判断しない。
+Future Action: SPEC完了判定では、まず `gh issue list --label gwt-spec --state all` で件数を確定し、`gh issue view <n> --json body` からTODO/checkbox/受け入れ証跡を抽出して、repo-local実装検索と突き合わせる。
+
+## 2026-06-23 — gwt-specのOPEN状態だけで未完了判定しない
+
+Type: lesson
+Context: 全SPEC実装状況検証で、過去Board検索により gwt-spec は living documentation としてOPEN維持される運用があると確認した。
+Learning: gwt-spec の完了判定では Issue state=OPEN/CLOSED だけを根拠にしない。完了/未完了は Issue本文のTasks/TDD/Acceptance、未チェックcheckbox、TODO、対応実装・テスト・PR/CI/ユーザー検証証跡で判断する。
+Future Action: 全SPEC監査では、まず live Issue一覧で対象を確定し、OPENはliving docとして扱う。そのうえで本文checkbox/TODOと実装・テスト証跡を照合し、Issue本文が未更新なら実装済みでも検証完了とは報告しない。
+
+## 2026-06-23 — gwt-specはrelease PRの自動Closeで閉じる
+
+Type: policy-change
+Context: 全 open gwt-spec の実装・検証完了監査後、user から「gwt-specもCloseするようにしてください。改善や修正が必要になれば、再オープンするようにしてください」と指示を受けた。その後、close は agent の手動操作ではなく release PR の `## Closing Issues` による GitHub 自動 close で実行されるべきだと確認された。
+Learning: canonical な gwt-spec は、実装・検証完了後も agent が手動 close しない。release PR 作成時に `Closing Issues` へ `Closes #...` として載せ、main への release PR merge 時に GitHub の自動 close に任せる。release helper は PR / commit 本文で参照された gwt-spec を closing keyword がなくても `Closes #...` に昇格する。後続の改善・修正・再検証が必要になった場合は、closed gwt-spec を reopen して継続可否を判断する。
+Future Action: release PR 準備時に、完了済み gwt-spec を `scripts/release/collect-closing-issues.sh` の出力または PR 本文の `## Closing Issues` に含める。develop PR の `Related Issues / Links` に gwt-spec が置かれている場合も release helper で Closing Issues へ昇格されることを確認する。手動 close してしまった場合は reopen し、release 自動 close 待ちに戻した理由をコメントに残す。reopen 時は理由、追加 scope、必要な検証をコメントに残す。
